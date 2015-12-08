@@ -18,25 +18,28 @@
 #if 1
 #define BLOCK_TRANSFER_SIZE         (0x100)
 
-#define C6678_DDR3_BASE (0x80000000U)
+#define C6678_DDR3_BASE     (0x80000000U)
 #define C6678_PCIEDATA_BASE (0x60000000U)
 
 // the DSPBootStaus Register value range.
-#define DSP_INIT_READY 			(0x00000011U)
-#define DSP_INIT_MASK 			(0x00000011U)
+#define DSP_INIT_READY 			(0x00000001U)
+#define DSP_INIT_MASK 			(0x00000001U)
 
-#define DSP_GETCODE_FINISH 		(0x00001100U)
-#define DSP_GETCODE_FAIL		(0x00001100U)
+#define DSP_GETCODE_FINISH 		(0x00000010U)
+#define DSP_GETCODE_FAIL		(0x00000000U)
 
-#define DSP_CRCCHECK_SUCCESSFUL (0x00110000U)
-#define DSP_CRCCHECK_FAIL		(0x00110000U)
+#define DSP_CRCCHECK_SUCCESSFUL (0x00000100U)
+#define DSP_CRCCHECK_FAIL		(0x00000000U)
 
-#define DSP_RUN_READY			(0x11000000U)
-#define DSP_RUN_FAIL			(0x11000000U)
+#define DSP_GETENTRY_FINISH 	(0x00001000U)
+#define DSP_GETENTRY_FAIL		(0x00000000U)
+
+#define DSP_RUN_READY			(0x10000000U)
+#define DSP_RUN_FAIL			(0x00000000U)
 
 // the PC_PushCodeStatus Register value range.
 #define PC_PUSHCODE_FINISH      (0x00000011U)
-#define PC_PUSHCODE_FAIL		(0x00000011U)
+#define PC_PUSHCODE_FAIL		(0x00000000U)
 // Register Length
 #define REG_LEN					(2*1024*4U)
 
@@ -78,13 +81,13 @@ void write_uart(char* msg)
 	}
 }
 
-void wait_and_start(void)
+void wait_and_start(registerTable *pRegisterTable)
 {
 	void (*entry)();
-	*((unsigned int *) BOOT_MAGIC_ADDR) = 0;
 	while (*((unsigned int *) BOOT_MAGIC_ADDR) == 0)
 		;
 	entry = (void (*)()) (*((unsigned int *) BOOT_MAGIC_ADDR));
+	pRegisterTable->DPUBootControl |= DSP_GETENTRY_FINISH;
 	(*entry)();
 }
 
@@ -177,6 +180,10 @@ void main(void)
 		if (crcResult == 0)
 		{
 			putData((uint32_t *) pCodeAddr, pBootEntryAddr);
+#if 0
+			sprintf(printMessage, "pBootEntryAddr = %x\n\r", pBootEntryAddr);
+			write_uart(printMessage);
+#endif
 		}
 		else
 		{
@@ -190,10 +197,16 @@ void main(void)
 	//	jump to the entry address and run(there need a syn in the DSP code)
 	if (*pBootEntryAddr != 0)
 	{
-		write_uart("begin read the *pBootEntryAddr\n\r");
+		sprintf(printMessage, "write %x to MAGIC_ADDR\n\r", *pBootEntryAddr);
+		write_uart(printMessage);
 		DEVICE_REG32_W(MAGIC_ADDR, *pBootEntryAddr);
+#if 0
+		sprintf(printMessage, "MAGIC_ADDR = %x\n\r",
+				DEVICE_REG32_R(MAGIC_ADDR));
+		write_uart(printMessage);
+#endif
 		//startBoot();
-		wait_and_start();
+		wait_and_start(pRegisterTable);
 	}
 
 }
@@ -293,6 +306,11 @@ int putData(uint32_t *DSPCodeAddr, uint32_t *pBootEntryAddr)
 //transfer the section code to DSP.
 		count = secSize / BLOCK_TRANSFER_SIZE;
 		remainder = secSize - count * BLOCK_TRANSFER_SIZE;
+#if 0
+		sprintf(printMessage, "secStartAddr=%x,secSize=%x,\n\r", secStartAddr,
+				secSize);
+		write_uart(printMessage);
+#endif
 		for (i = 0; i < count; i++)
 		{
 			for (j = 0; j < BLOCK_TRANSFER_SIZE / 4; j++)
