@@ -34,7 +34,7 @@
 #define DSP_GETENTRY_FINISH 	(0x00001000U)
 #define DSP_GETENTRY_FAIL		(0x00000000U)
 
-#define DSP_RUN_READY			(0x10000000U)
+#define DSP_RUN_READY			(0x00010000U)
 #define DSP_RUN_FAIL			(0x00000000U)
 
 // the PC_PushCodeStatus Register value range.
@@ -223,8 +223,8 @@ int pollValue(uint32_t *pAddress, uint32_t pollVal, uint32_t maxPollCount)
 			loopCount++)
 	{
 		realTimeVal = (*pAddress);
-		//if (realTimeVal & pollVal)
-		if (realTimeVal == pollVal)
+		if (realTimeVal & pollVal)
+		//if (realTimeVal == pollVal)
 		{
 			stopPoll = 1;
 		}
