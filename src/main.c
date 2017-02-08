@@ -10,6 +10,11 @@
 
 #define MAGIC_ADDR          		(0x0087FFFC)
 
+// global Magic address
+#define GBOOT_MAGIC_ADDR(coreNum)			((1<<28) + ((coreNum)<<24) + (MAGIC_ADDR))
+// global IPC interrupt address
+#define IPC_INT_ADDR(coreNum)				(0x02620240 + ((coreNum)*4))
+
 #define DEF_INIT_CONFIG_UART_BAUDRATE 115200
 #define BOOT_MAGIC_ADDR 0x87FFFC	/* boot address in the last word of L2 memory */
 #define MAGIC_NUMBER_ADDR 0x81FFE0
@@ -58,6 +63,10 @@ typedef struct _tagRegisterTable
 	uint32_t reserved1[0x1000 / 4 - 3];
 } registerTable;
 
+char printMessage[255];
+
+extern cregister volatile unsigned int DNUM;
+
 #endif
 
 #if 1
@@ -91,123 +100,164 @@ void wait_and_start(registerTable *pRegisterTable)
 	(*entry)();
 }
 
-void main(void)
+void subCoreBootStart()
 {
-	char printMessage[255];
+	// display the coreN boot successufl.
+	// check the magic address in the circle.
+	// if magic address is not zero,jump to it.
+	void (*entry)();
 
-	uint32_t BootEntryAddr = 0;
-	uint32_t *pBootEntryAddr = &BootEntryAddr;
+	sprintf(printMessage, "core%d boot successful\n\r", DNUM);
+	write_uart(printMessage);
 
-	int pcPushCodeFlag = 0;
-#if 1
-	platform_init_flags flags;
-	platform_init_config config;
-
-	/* Platform initialization */
-	flags.pll = 0x1;
-	flags.ddr = 0x0;
-	flags.tcsl = 0x1;
-	flags.phy = 0x1;
-	flags.ecc = 0x1;
-
-	/* Original pllm configuraion : default 0 -> 1 GHz */
-	config.pllm = 0;
-
-	/* Check if external pllm is set*/
-	if (*((unsigned int *) MAGIC_NUMBER_ADDR) == 0xFACE13FE)
+	while (0 == *(int *) BOOT_MAGIC_ADDR)
 	{
-		config.pllm = *(unsigned int *) PLLM_ADDR;
+		;
 	}
 
-	platform_init(&flags, &config);
-	memset(&flags, 0, sizeof(flags));
-	flags.ddr = 0x1;
-	platform_init(&flags, &config);
+	sprintf(printMessage, "core%d 's boot Address=%x\n\r", BOOT_MAGIC_ADDR);
+	//entry = (void (*)()) (*(unsigned *) BOOT_MAGIC_ADDR);
+	//(*entry)();
+	while (1)
+	{
+		;
+	}
 
-	platform_uart_init();
-	platform_uart_set_baudrate(DEF_INIT_CONFIG_UART_BAUDRATE);
+}
+
+void main(void)
+{
+	if (0 == DNUM)
+	{
+		uint32_t BootEntryAddr = 0;
+		uint32_t *pBootEntryAddr = &BootEntryAddr;
+
+		int pcPushCodeFlag = 0;
+#if 1
+		platform_init_flags flags;
+		platform_init_config config;
+
+		/* Platform initialization */
+		flags.pll = 0x1;
+		flags.ddr = 0x0;
+		flags.tcsl = 0x1;
+		flags.phy = 0x1;
+		flags.ecc = 0x1;
+
+		/* Original pllm configuraion : default 0 -> 1 GHz */
+		config.pllm = 0;
+
+		/* Check if external pllm is set*/
+		if (*((unsigned int *) MAGIC_NUMBER_ADDR) == 0xFACE13FE)
+		{
+			config.pllm = *(unsigned int *) PLLM_ADDR;
+		}
+
+		platform_init(&flags, &config);
+		memset(&flags, 0, sizeof(flags));
+		flags.ddr = 0x1;
+		platform_init(&flags, &config);
+
+		platform_uart_init();
+		platform_uart_set_baudrate(DEF_INIT_CONFIG_UART_BAUDRATE);
 #endif
 //	wait_and_start();
 
-	registerTable *pRegisterTable = (registerTable *) C6678_PCIEDATA_BASE;
-	pRegisterTable->DPUBootControl = 0x00000000;
-	write_uart("Init the DSP finished\n\r");
+		registerTable *pRegisterTable = (registerTable *) C6678_PCIEDATA_BASE;
+		pRegisterTable->DPUBootControl = 0x00000000;
+		write_uart("Init the DSP finished\n\r");
 
-	// 2. write the DSPInitReadyFlag
-	pRegisterTable->DPUBootControl |= DSP_INIT_READY;
+		// 2. write the DSPInitReadyFlag
+		pRegisterTable->DPUBootControl |= DSP_INIT_READY;
 
-	// 3. wait for the PC put code to DDR3. and return the status.
-	pcPushCodeFlag = pollValue(&(pRegisterTable->DPUBootStatus),
-			PC_PUSHCODE_FINISH, 0x7fffffff);
-	if (pcPushCodeFlag == 0)
-	{
-		write_uart("Get the code successful\n\r");
-
-		sprintf(printMessage, "DPUBootStatus=%x\n\r",
-				pRegisterTable->DPUBootStatus);
-		write_uart(printMessage);
-		pRegisterTable->DPUBootControl |= DSP_GETCODE_FINISH;
-	}
-	else
-	{
-		write_uart("Get the code error:time over\n\r");
-		pRegisterTable->DPUBootControl |= DSP_GETCODE_FAIL;
-	}
-
-	// 4. check the code and put the section to the proper address.
-	if (pcPushCodeFlag == 0)
-	{
-		// check the code.
-		uint32_t crcResult = 0;
-		uint8_t *pCodeAddr = (uint8_t *) (REG_LEN + C6678_PCIEDATA_BASE);
-
-		write_uart("begin to calculate the crc\n\r");
-
-		crcResult = coffFileCheckCrc(pCodeAddr);
-		if (crcResult == 0)
+		// 3. wait for the PC put code to DDR3. and return the status.
+		pcPushCodeFlag = pollValue(&(pRegisterTable->DPUBootStatus),
+				PC_PUSHCODE_FINISH, 0x7fffffff);
+		if (pcPushCodeFlag == 0)
 		{
-			// crc check successful.
-			pRegisterTable->DPUBootControl |= DSP_CRCCHECK_SUCCESSFUL;
+			write_uart("Get the code successful\n\r");
+
+			sprintf(printMessage, "DPUBootStatus=%x\n\r",
+					pRegisterTable->DPUBootStatus);
+			write_uart(printMessage);
+			pRegisterTable->DPUBootControl |= DSP_GETCODE_FINISH;
 		}
 		else
 		{
-			// crc check failed.
-			pRegisterTable->DPUBootControl |= DSP_CRCCHECK_FAIL;
+			write_uart("Get the code error:time over\n\r");
+			pRegisterTable->DPUBootControl |= DSP_GETCODE_FAIL;
 		}
-		sprintf(printMessage, "the crc value is %x\n\r", crcResult);
-		write_uart(printMessage);
 
-		if (crcResult == 0)
+		// 4. check the code and put the section to the proper address.
+		if (pcPushCodeFlag == 0)
 		{
-			putData((uint32_t *) pCodeAddr, pBootEntryAddr);
+			// check the code.
+			uint32_t crcResult = 0;
+			uint8_t *pCodeAddr = (uint8_t *) (REG_LEN + C6678_PCIEDATA_BASE);
+
+			write_uart("begin to calculate the crc\n\r");
+
+			crcResult = coffFileCheckCrc(pCodeAddr);
+			if (crcResult == 0)
+			{
+				// crc check successful.
+				pRegisterTable->DPUBootControl |= DSP_CRCCHECK_SUCCESSFUL;
+			}
+			else
+			{
+				// crc check failed.
+				pRegisterTable->DPUBootControl |= DSP_CRCCHECK_FAIL;
+			}
+			sprintf(printMessage, "the crc value is %x\n\r", crcResult);
+			write_uart(printMessage);
+
+			if (crcResult == 0)
+			{
+				putData((uint32_t *) pCodeAddr, pBootEntryAddr);
 #if 0
-			sprintf(printMessage, "pBootEntryAddr = %x\n\r", pBootEntryAddr);
+				sprintf(printMessage, "pBootEntryAddr = %x\n\r", pBootEntryAddr);
+				write_uart(printMessage);
+#endif
+			}
+			else
+			{
+			}
+
+		}
+		else
+		{
+		}
+		// 5. writes the boot entry address to the subcores MAGICADDR
+		if (*pBootEntryAddr != 0)
+		{
+			sprintf(printMessage, "write %x to sub cores' MAGIC_ADDR\n\r",
+					*pBootEntryAddr);
+			write_uart(printMessage);
+
+			//DEVICE_REG32_W(MAGIC_ADDR, *pBootEntryAddr);
+			unsigned int coreIndex = 0;
+			for (coreIndex = 1; coreIndex < 8; coreIndex++)
+			{
+				DEVICE_REG32_W(GBOOT_MAGIC_ADDR(coreIndex), *pBootEntryAddr);
+				platform_delay(100);
+				DEVICE_REG32_W(IPC_INT_ADDR(coreIndex), 1);
+				platform_delay(500);
+			}
+#if 0
+			sprintf(printMessage, "MAGIC_ADDR = %x\n\r",
+					DEVICE_REG32_R(MAGIC_ADDR));
 			write_uart(printMessage);
 #endif
+			//wait_and_start(pRegisterTable);
+			wait_and_start(pRegisterTable);
 		}
-		else
-		{
-		}
-
 	}
 	else
 	{
+		subCoreBootStart();
 	}
-	// 5. writes the boot entry address to the MAGICADDR
-	//	jump to the entry address and run(there need a syn in the DSP code)
-	if (*pBootEntryAddr != 0)
-	{
-		sprintf(printMessage, "write %x to MAGIC_ADDR\n\r", *pBootEntryAddr);
-		write_uart(printMessage);
-		DEVICE_REG32_W(MAGIC_ADDR, *pBootEntryAddr);
-#if 0
-		sprintf(printMessage, "MAGIC_ADDR = %x\n\r",
-				DEVICE_REG32_R(MAGIC_ADDR));
-		write_uart(printMessage);
-#endif
-		//startBoot();
-		wait_and_start(pRegisterTable);
-	}
+
+	// for no
 
 }
 #if 1
