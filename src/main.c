@@ -10,8 +10,12 @@
 
 #define MAGIC_ADDR          		(0x0087FFFC)
 
+#define CHIP_LEVEL_REG  0x02620000
+#define KICK0           (CHIP_LEVEL_REG + 0x0038)
+#define KICK1           (CHIP_LEVEL_REG + 0x003C)
 // global Magic address
 #define GBOOT_MAGIC_ADDR(coreNum)			((1<<28) + ((coreNum)<<24) + (MAGIC_ADDR))
+#define CORE0_MAGIC_ADDR                   (0x1087FFFC)
 // global IPC interrupt address
 #define IPC_INT_ADDR(coreNum)				(0x02620240 + ((coreNum)*4))
 
@@ -42,19 +46,29 @@
 #define DSP_RUN_READY			(0x00010000U)
 #define DSP_RUN_FAIL			(0x00000000U)
 
+//cyx
+#define DSP_TEST_SET           (0x00100000U)
+
 // the PC_PushCodeStatus Register value range.
 #define PC_PUSHCODE_FINISH      (0x00000011U)
 #define PC_PUSHCODE_FAIL		(0x00000000U)
 // Register Length
 #define REG_LEN					(2*1024*4U)
 
+#define BOOT_MAGIC_NUMBER       (0xBABEFACE)
+
+#define TEST_ADDR (0x0087fff8)
+#define GTEST_ADDR(coreNum) (1<<28 + coreNum<<24 + TEST_ADDR)
+
 typedef struct _tagRegisterTable
 {
 	// control registers. (4k)
 	uint32_t DPUBootControl;
+	uint32_t SetMultiCoreBootControl;
+	uint32_t MultiCoreBootControl;
 	uint32_t writeControl;
 	uint32_t readControl;
-	uint32_t reserved0[0x1000 / 4 - 3];
+	uint32_t reserved0[0x1000 / 4 - 5];
 
 	// status registers. (4k)
 	uint32_t DPUBootStatus;
@@ -66,6 +80,7 @@ typedef struct _tagRegisterTable
 char printMessage[255];
 
 extern cregister volatile unsigned int DNUM;
+extern far uint32_t _c_int00;
 
 #endif
 
@@ -92,12 +107,34 @@ void write_uart(char* msg)
 
 void wait_and_start(registerTable *pRegisterTable)
 {
-	void (*entry)();
-	while (*((unsigned int *) BOOT_MAGIC_ADDR) == 0)
+	//void (*entry)();
+
+	uint32_t i,temp;
+	uint32_t Core0L2=(0x1087ffff-8*4);
+	sprintf(printMessage, "in wait_and_start()\n\r");
+	write_uart(printMessage);
+	/*while (*((unsigned int *) BOOT_MAGIC_ADDR) == 0)
 		;
-	entry = (void (*)()) (*((unsigned int *) BOOT_MAGIC_ADDR));
+	entry = (void (*)()) (*((unsigned int *) BOOT_MAGIC_ADDR));*/
+/*	while ((*((unsigned int *) GBOOT_MAGIC_ADDR(1)) == 0) || (*((unsigned int *) GBOOT_MAGIC_ADDR(2)) == 0) || (*((unsigned int *) GBOOT_MAGIC_ADDR(3)) == 0)
+			|| (*((unsigned int *) GBOOT_MAGIC_ADDR(4)) == 0) || (*((unsigned int *) GBOOT_MAGIC_ADDR(5)) == 0) || (*((unsigned int *) GBOOT_MAGIC_ADDR(6)) == 0)
+			|| (*((unsigned int *) GBOOT_MAGIC_ADDR(7)) == 0) )
+			;*/
+
+	for(i=1;i<8;i++){
+		temp=*((uint32_t*)(Core0L2+i*4));
+		sprintf(printMessage, "temp is %x,pRegisterTable->MultiCoreBootControl is %x\n\r",temp,pRegisterTable->MultiCoreBootControl);
+		write_uart(printMessage);
+
+		pRegisterTable->MultiCoreBootControl |= (temp<<i);
+	}
+	sprintf(printMessage, "pRegisterTable->MultiCoreBootControl is %x\n\r",pRegisterTable->MultiCoreBootControl);
+	write_uart(printMessage);
+	/*while((*(ptr+1)==0x1) && (*(ptr+2)==0x1) && (*(ptr+3)==0x1) && (*(ptr+4)==0x1) && (*(ptr+5)==0x1) && (*(ptr+6)==0x1) && (*(ptr+7)==0x1)){
+		pRegisterTable->MultiCoreBootControl=0xff;
+	}*/
 	pRegisterTable->DPUBootControl |= DSP_GETENTRY_FINISH;
-	(*entry)();
+	//(*entry)();
 }
 
 void subCoreBootStart()
@@ -105,17 +142,19 @@ void subCoreBootStart()
 	// display the coreN boot successufl.
 	// check the magic address in the circle.
 	// if magic address is not zero,jump to it.
+	//sprintf(printMessage, "in subCoreBootStart()\n\r");
+	//write_uart(printMessage);
 	void (*entry)();
 
-	sprintf(printMessage, "core%d boot successful\n\r", DNUM);
-	write_uart(printMessage);
+	//sprintf(printMessage, "core%d boot successful\n\r", DNUM);
+	//write_uart(printMessage);
 
 	while (0 == *(int *) BOOT_MAGIC_ADDR)
 	{
 		;
 	}
 
-	sprintf(printMessage, "core%d 's boot Address=%x\n\r", BOOT_MAGIC_ADDR);
+	//sprintf(printMessage, "core%d 's boot Address=%x\n\r", BOOT_MAGIC_ADDR);
 	//entry = (void (*)()) (*(unsigned *) BOOT_MAGIC_ADDR);
 	//(*entry)();
 	while (1)
@@ -124,16 +163,42 @@ void subCoreBootStart()
 	}
 
 }
+/*
+ void subCoreBootStart()
+ {
+ // display the coreN boot successufl.
+ // check the magic address in the circle.
+ // if magic address is not zero,jump to it.
+ void (*entry)();
 
+ sprintf(printMessage, "core%d boot successful\n\r", DNUM);
+ write_uart(printMessage);
+
+ while (0 == *(int *) BOOT_MAGIC_ADDR)
+ {
+ ;
+ }
+
+ sprintf(printMessage, "core%d 's boot Address=%x\n\r", BOOT_MAGIC_ADDR);
+ entry = (void (*)()) (*(unsigned *) BOOT_MAGIC_ADDR);
+ (*entry)();
+
+
+ }
+ */
 void main(void)
 {
+
 	if (0 == DNUM)
 	{
+
 		uint32_t BootEntryAddr = 0;
 		uint32_t *pBootEntryAddr = &BootEntryAddr;
 
+
 		int pcPushCodeFlag = 0;
-#if 1
+		//for U0 init code
+#if 0
 		platform_init_flags flags;
 		platform_init_config config;
 
@@ -160,11 +225,44 @@ void main(void)
 
 		platform_uart_init();
 		platform_uart_set_baudrate(DEF_INIT_CONFIG_UART_BAUDRATE);
+
 #endif
+		//for U1-U3 init code
+#if 1
+		platform_init_flags flags;
+		platform_init_config config;
+
+		/* Platform initialization */
+		flags.pll = 0x1;
+		flags.ddr = 0x1;
+		//flags.tcsl = 0x1;
+		//flags.phy = 0x1;
+		flags.ecc = 0x1;
+
+		/* Original pllm configuraion : default 0 -> 1 GHz */
+		config.pllm = 0;
+
+		/* Check if external pllm is set*/
+		if (*((unsigned int *) MAGIC_NUMBER_ADDR) == 0xFACE13FE)
+		{
+			config.pllm = *(unsigned int *) PLLM_ADDR;
+		}
+
+		platform_init(&flags, &config);
+		memset(&flags, 0, sizeof(flags));
+		//flags.ddr = 0x1;
+		//platform_init(&flags, &config);
+
+		//platform_uart_init();
+		//platform_uart_set_baudrate(DEF_INIT_CONFIG_UART_BAUDRATE);
+
+#endif
+
 //	wait_and_start();
 
 		registerTable *pRegisterTable = (registerTable *) C6678_PCIEDATA_BASE;
 		pRegisterTable->DPUBootControl = 0x00000000;
+		pRegisterTable->MultiCoreBootControl |= 0x1;//mark core0 boot;
 		write_uart("Init the DSP finished\n\r");
 
 		// 2. write the DSPInitReadyFlag
@@ -227,6 +325,8 @@ void main(void)
 		else
 		{
 		}
+
+
 		// 5. writes the boot entry address to the subcores MAGICADDR
 		if (*pBootEntryAddr != 0)
 		{
@@ -235,28 +335,69 @@ void main(void)
 			write_uart(printMessage);
 
 			//DEVICE_REG32_W(MAGIC_ADDR, *pBootEntryAddr);
+			//*(volatile uint32_t *)(0x0087fffc)=0xBABEFACE;
+
 			unsigned int coreIndex = 0;
-			for (coreIndex = 1; coreIndex < 8; coreIndex++)
+			for (coreIndex =1; coreIndex < 8; coreIndex++)
 			{
+
 				DEVICE_REG32_W(GBOOT_MAGIC_ADDR(coreIndex), *pBootEntryAddr);
-				platform_delay(100);
-				DEVICE_REG32_W(IPC_INT_ADDR(coreIndex), 1);
-				platform_delay(500);
+				//DEVICE_REG32_W(GBOOT_MAGIC_ADDR(coreIndex), (uint32_t)&_c_int00);
+
+				platform_delay(10000);
+				sprintf(printMessage, "coreIndex=%d\n\r",
+									coreIndex);
+							write_uart(printMessage);
+
+
 			}
-#if 0
-			sprintf(printMessage, "MAGIC_ADDR = %x\n\r",
-					DEVICE_REG32_R(MAGIC_ADDR));
-			write_uart(printMessage);
-#endif
-			//wait_and_start(pRegisterTable);
+
+			for (coreIndex =1; coreIndex < 8; coreIndex++)
+			{
+
+
+				DEVICE_REG32_W(IPC_INT_ADDR(coreIndex), 1);
+				platform_delay(1000000);
+				sprintf(printMessage, "coreIndex_ipc=%d\n\r",
+													coreIndex);
+											write_uart(printMessage);
+			}
+			pRegisterTable->SetMultiCoreBootControl=0xff;
+			write_uart("set DSP_SetMultiCoreBootControl=0XFF to make 8 core boot\n\r");
 			wait_and_start(pRegisterTable);
+			platform_delay(10000000);
+			platform_delay(10000000);
+			write_uart("begin test\n\r");
+
+
+		/*	for (coreIndex = 2; coreIndex < 8; coreIndex++)
+			{
+
+				//DEVICE_REG32_W(GBOOT_MAGIC_ADDR(coreIndex), *pBootEntryAddr);
+				//DEVICE_REG32_W(GBOOT_MAGIC_ADDR(coreIndex), (uint32_t)&_c_int00);
+
+				//platform_delay(100);
+
+
+				platform_delay(1000);
+				sprintf(printMessage, "corevalue=%x\n\r",
+						(*(volatile uint32_t *)GBOOT_MAGIC_ADDR(coreIndex)));
+				write_uart(printMessage);
+
+			}*/
+
 		}
 	}
-	else
+	/*else
 	{
+		//sprintf(printMessage, "before subCoreBootStart()\n\r");
+		//write_uart(printMessage);
+		*(int *) TEST_ADDR = DNUM;
 		subCoreBootStart();
-	}
-
+		//write_boot_magic_number();
+	}*/
+	//while (1)
+	//	;
 	// for no
 
 }
