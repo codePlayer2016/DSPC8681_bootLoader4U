@@ -93,6 +93,10 @@ static int putData(uint32_t *DSPCodeAddr, uint32_t *pBootEntryAddr);
 uint32_t byteTo32bits(uint8_t *pDspCode);
 #endif
 
+
+////////////////////////////////////////////////lhs
+#define DEBUG_PROCESS 1
+#ifdef DEBUG_PROCESS
 void write_uart(char* msg)
 {
 	uint32_t i;
@@ -104,7 +108,12 @@ void write_uart(char* msg)
 		platform_uart_write(msg[i]);
 	}
 }
-
+#elif
+void write_uart(char *msg)
+{
+}
+#endif
+/////////////////////////////////////////////////
 void wait_and_start(registerTable *pRegisterTable)
 {
 	//void (*entry)();
@@ -197,8 +206,8 @@ void main(void)
 
 
 		int pcPushCodeFlag = 0;
-		//for U0 init code
-#if 0
+		// 1.init the platform(all the U) in the core0
+#if 1
 		platform_init_flags flags;
 		platform_init_config config;
 
@@ -227,48 +236,57 @@ void main(void)
 		platform_uart_set_baudrate(DEF_INIT_CONFIG_UART_BAUDRATE);
 
 #endif
-		//for U1-U3 init code
-#if 1
-		platform_init_flags flags;
-		platform_init_config config;
 
-		/* Platform initialization */
-		flags.pll = 0x1;
-		flags.ddr = 0x1;
-		//flags.tcsl = 0x1;
-		//flags.phy = 0x1;
-		flags.ecc = 0x1;
-
-		/* Original pllm configuraion : default 0 -> 1 GHz */
-		config.pllm = 0;
-
-		/* Check if external pllm is set*/
-		if (*((unsigned int *) MAGIC_NUMBER_ADDR) == 0xFACE13FE)
-		{
-			config.pllm = *(unsigned int *) PLLM_ADDR;
-		}
-
-		platform_init(&flags, &config);
-		memset(&flags, 0, sizeof(flags));
-		//flags.ddr = 0x1;
-		//platform_init(&flags, &config);
-
-		//platform_uart_init();
-		//platform_uart_set_baudrate(DEF_INIT_CONFIG_UART_BAUDRATE);
-
-#endif
-
-//	wait_and_start();
-
+		// 2.DSP platform is init ready.
 		registerTable *pRegisterTable = (registerTable *) C6678_PCIEDATA_BASE;
-		pRegisterTable->DPUBootControl = 0x00000000;
-		pRegisterTable->MultiCoreBootControl |= 0x1;//mark core0 boot;
-		write_uart("Init the DSP finished\n\r");
-
-		// 2. write the DSPInitReadyFlag
+		pRegisterTable->MultiCoreBootControl |= 0x1;
 		pRegisterTable->DPUBootControl |= DSP_INIT_READY;
 
-		// 3. wait for the PC put code to DDR3. and return the status.
+
+
+		int coreIndex=0;
+		int coreMaxNum=7; // todo: make this var is macro.
+
+		// one by one because
+		for(coreIndex=0;index<coreMaxNum;coreIndex++)
+		{
+			// 3. wait for the PC put code to readZONE. and return the status.
+			// pollValue to know the code if be pushed to the readZONE by PC.
+			// if successful. change the status.
+			// add some debug info
+		}
+
+		for(coreIndex=0;index<coreMaxNum;coreIndex++)
+		{
+			// 4. push the code to the responding sections.(not check.)
+			// if successful. change the status.
+			// add some debug info
+		}
+
+		for(coreIndex=1;index<coreMaxNum;coreIndex++)
+		{
+			// 5. write the start address to the magic address.
+			// add some debug info
+		}
+
+		for(coreIndex=1;index<coreMaxNum;coreIndex++)
+		{
+			// 6. make interrupt to the cores(1~7).
+			// add some debug info
+		}
+
+		// 7. void(*)()entry=start address of the core0;
+		// entry();
+		// add some debug info.
+		//finish.
+
+
+
+
+
+
+
+
 		pcPushCodeFlag = pollValue(&(pRegisterTable->DPUBootStatus),
 				PC_PUSHCODE_FINISH, 0x7fffffff);
 		if (pcPushCodeFlag == 0)
