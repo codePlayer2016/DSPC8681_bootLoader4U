@@ -264,8 +264,8 @@ int main(void)
 			write_uart(printMessage);
 		}
 		// TODO: pRegisterTable->DPUBootControl,should express every core status.
-		pRegisterTable->DPUBootControl |= DSP_GETENTRY_FINISH;
-		pRegisterTable->DPUBootControl |= DSP_RUN_READY;
+		//pRegisterTable->DPUBootControl |= DSP_GETENTRY_FINISH;
+		//pRegisterTable->DPUBootControl |= DSP_RUN_READY;
 		(*core0EntryAddr)();
 
 #if 0
