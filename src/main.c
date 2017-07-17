@@ -212,7 +212,7 @@ int main(void)
 				{
 					retVal = -2;
 
-					sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code failed\n\r", *pBootEntryAddr);
+					sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code failed\n\r", coreIndex,*pBootEntryAddr);
 					write_uart(printMessage);
 					return (retVal);
 				}
@@ -229,11 +229,11 @@ int main(void)
 			{
 				retVal = -2;
 
-				sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code failed\n\r", *pBootEntryAddr);
+				sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code failed\n\r", coreIndex, *pBootEntryAddr);
 				write_uart(printMessage);
 				return (retVal);
 			}
-			sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code successful\n\r", *pBootEntryAddr);
+			sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code successful\n\r", coreIndex, *pBootEntryAddr);
 			write_uart(printMessage);
 		}
 
@@ -241,6 +241,7 @@ int main(void)
 		platform_delay(10000000);
 
 		// wait the subCore to start.
+		// TODO: set the *((uint32_t*) (Core0L2 + coreIndex * 4)) to 0 before polling that address.
 		// core1-core7 will write 1 to the Core0L2 + coreIndex * 4 after it boot.
 		uint32_t temp;
 		uint32_t Core0L2 = (0x1087ffff - 8 * 4);
