@@ -185,6 +185,9 @@ int main(void)
 
 		write_uart("DSPC8681 Platform inition successful\n\r");
 
+		uint32_t Core0L2 = (0x1087ffff - 8 * sizeof(uint32_t));
+		memset((uint8_t *) Core0L2, 0, 8 * sizeof(uint32_t));
+
 		int coreIndex = 0;
 		int coreMaxNum = 8; // todo: make this var macro.
 
@@ -290,7 +293,7 @@ int main(void)
 		// TODO: set the *((uint32_t*) (Core0L2 + coreIndex * 4)) to 0 before polling that address.
 		// core1-core7 will write 1 to the Core0L2 + coreIndex * 4 after it boot.
 		uint32_t temp;
-		uint32_t Core0L2 = (0x1087ffff - 8 * 4);
+		Core0L2 = (0x1087ffff - 8 * 4);
 		pRegisterTable->MultiCoreBootControl = 0x00000001;		// core 0 have boot.
 		for (coreIndex = 1; coreIndex < coreMaxNum; coreIndex++)
 		{
@@ -505,6 +508,7 @@ int writeTOdsp()
 	//writeOutBuffer();
 	//updateWriteBuffer(writeFinished);
 	//waitDSPreadFinished();
+	return 0;
 }
 int readFromPC()
 {
@@ -513,6 +517,7 @@ int readFromPC()
 	//readInBuffer();
 	//updateReadBuffer(readFinished);
 	//waitWriteBufferReset();
+	return 0;
 }
 
 #endif
