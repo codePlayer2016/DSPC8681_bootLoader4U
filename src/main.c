@@ -34,6 +34,7 @@
 #define DSP_INIT_READY 			(0x00000001U)
 #define DSP_INIT_MASK 			(0x00000001U)
 
+#define DSP_GETCODE_RESET		(0x00000001U)
 #define DSP_GETCODE_FINISH 		(0x00000010U)
 #define DSP_GETCODE_FAIL		(0x00000000U)
 
@@ -50,7 +51,8 @@
 #define DSP_TEST_SET           (0x00100000U)
 
 // the PC_PushCodeStatus Register value range.
-#define PC_PUSHCODE_FINISH      (0x00000001U)
+#define PC_PUSHCODE_RESET		(0x00000001U)
+#define PC_PUSHCODE_FINISH      (0x00000010U)
 #define PC_PUSHCODE_FAIL		(0x00000000U)
 // Register Length
 #define REG_LEN					(2*1024*4U)
@@ -59,7 +61,7 @@
 
 //#define TEST_ADDR (0x0087fff8)
 #define GTEST_ADDR(coreNum) (1<<28 + coreNum<<24 + TEST_ADDR)
-
+#if 0
 typedef struct _tagRegisterTable
 {
 	// control registers. (4k)
@@ -68,15 +70,37 @@ typedef struct _tagRegisterTable
 	uint32_t MultiCoreBootControl;
 	uint32_t writeControl;
 	uint32_t readControl;
-	uint32_t reserved0[0x1000 / 4 - 5];
+	uint32_t DSPgetCodeControl;
+	uint32_t reserved0[0x1000 / 4 - 6];
 
 	// status registers. (4k)
 	uint32_t DPUBootStatus;
 	uint32_t writeStatus;
 	uint32_t readStatus;
-	uint32_t reserved1[0x1000 / 4 - 3];
-} registerTable;
+	uint32_t DSPgetCodeStatus;
+	uint32_t reserved1[0x1000 / 4 - 4];
+}registerTable;
+#endif
+typedef struct _tagRegisterTable
+{
+	// control registers. (4k)
+	uint32_t DPUBootControl;
+	uint32_t SetMultiCoreBootControl;
+	uint32_t MultiCoreBootControl;
+	uint32_t writeControl;
+	uint32_t readControl;
+	uint32_t reserved0[5];
+	uint32_t pushCodeControl;
+	uint32_t reserved1[0x1000 / 4 - 11];
 
+	// status registers. (4k)
+	uint32_t DPUBootStatus;
+	uint32_t writeStatus;
+	uint32_t readStatus;
+	uint32_t reserved2[4];
+	uint32_t pushCodeStatus;
+	uint32_t reserved3[0x1000 / 4 - 8];
+} registerTable;
 char printMessage[255];
 
 extern cregister volatile unsigned int DNUM;
@@ -155,87 +179,109 @@ int main(void)
 
 		// 2.DSP platform is init ready.
 		registerTable *pRegisterTable = (registerTable *) C6678_PCIEDATA_BASE;
+
 		pRegisterTable->MultiCoreBootControl |= 0x1;
 		pRegisterTable->DPUBootControl |= DSP_INIT_READY;
 
 		write_uart("DSPC8681 Platform inition successful\n\r");
 
 		int coreIndex = 0;
-		int coreMaxNum = 7; // todo: make this var macro.
+		int coreMaxNum = 8; // todo: make this var macro.
 
 		// TODO:
 		// improve,we can recode the status of every code, and should not return if one core boot failed.
+		//pRegisterTable->pushCodeControl = DSP_GETCODE_RESET;
 		for (coreIndex = 0; coreIndex < coreMaxNum; coreIndex++)
 		{
-			// 3. wait for the PC put code to readZONE. and return the status.
-			pcPushCodeFlag = pollValue(&(pRegisterTable->DPUBootStatus), PC_PUSHCODE_FINISH, 0x7fffffff);
+
+			//* 1.updateReadBuffer(resetBeforRead).
+			pRegisterTable->pushCodeControl = DSP_GETCODE_RESET;
+			//* 2.waitPcWrite
+			pcPushCodeFlag = pollValue(&(pRegisterTable->pushCodeStatus), PC_PUSHCODE_FINISH, 0x7fffffff);
 			if (pcPushCodeFlag == 0)
 			{
-				pRegisterTable->DPUBootControl |= DSP_GETCODE_FINISH;
-			}
-			else
-			{
-				pRegisterTable->DPUBootControl |= DSP_GETCODE_FAIL;
-				retVal = -1;
-			}
-
-			if (retVal == 0)
-			{
-				sprintf(printMessage, "coreId=%x,DPUBootStatus=%x,pc push code successful\n\r", coreIndex, pRegisterTable->DPUBootStatus);
+				sprintf(printMessage, "coreId=%x,waitPcWriteSuccessful\n\r", coreIndex);
 				write_uart(printMessage);
+				//pRegisterTable->DPUBootControl |= DSP_GETCODE_FINISH;
 			}
 			else
 			{
-				sprintf(printMessage, "coreId=%x,DPUBootStatus=%x,pc push code failed\n\r", coreIndex, pRegisterTable->DPUBootStatus);
+				//pRegisterTable->DPUBootControl |= DSP_GETCODE_FAIL;
+				retVal = -1;
+				sprintf(printMessage, "coreId=%x,waitPcWriteFailed\n\r", coreIndex);
 				write_uart(printMessage);
 				return (retVal);
 			}
-
+			//* 3. readInBuffer()
 			// TODO:
 			// add crc check.
-
-			// 4. load the code to the u0-u7 ddr and write the start addr to the magic of the core1-core7 and triggle it.
+			///load the code to the u0-u7 ddr and write the start addr to the magic of the core1-core7 and triggle it.
 			// LOOKOUT:
 			// Cache operator.
-			*pBootEntryAddr = 0;
-			pCodeStartAddr = (uint8_t *) (REG_LEN + C6678_PCIEDATA_BASE);
-			putData((uint32_t *) pCodeStartAddr, pBootEntryAddr);
-
-			if (coreIndex == 0)
+#if 1
 			{
-				if (*pBootEntryAddr != 0)
+				*pBootEntryAddr = 0;
+				pCodeStartAddr = (uint8_t *) (REG_LEN + C6678_PCIEDATA_BASE);
+				putData((uint32_t *) pCodeStartAddr, pBootEntryAddr);
+
+				if (0 == coreIndex)
 				{
-					core0EntryAddr = (void (*)()) (*(unsigned *) pBootEntryAddr);
-					continue;
+					if (*pBootEntryAddr != 0)
+					{
+						core0EntryAddr = (void (*)()) (*(unsigned *) pBootEntryAddr);
+					}
+					else
+					{
+						retVal = -2;
+						sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code failed\n\r", coreIndex, *pBootEntryAddr);
+						write_uart(printMessage);
+						return (retVal);
+					}
 				}
 				else
 				{
-					retVal = -2;
 
-					sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code failed\n\r", coreIndex,*pBootEntryAddr);
-					write_uart(printMessage);
-					return (retVal);
+					if (*pBootEntryAddr != 0)
+					{
+						DEVICE_REG32_W(GBOOT_MAGIC_ADDR(coreIndex), *pBootEntryAddr);
+						platform_delay(1000);
+						DEVICE_REG32_W(IPC_INT_ADDR(coreIndex), 1);
+						//platform_delay(1000000);
+					}
+					else
+					{
+						retVal = -2;
+
+						sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code failed\n\r", coreIndex, *pBootEntryAddr);
+						write_uart(printMessage);
+						return (retVal);
+					}
 				}
+				sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code successful\n\r", coreIndex, *pBootEntryAddr);
+				write_uart(printMessage);
 			}
+#endif
+			//* 4.updateReadBuffer(finished);
+			pRegisterTable->pushCodeControl = DSP_GETCODE_FINISH;
+			write_uart("updateReadBuffer_finished\n\r");
 
-			if (*pBootEntryAddr != 0)
+			//* 5. waitWriteBufferReset();
+			pcPushCodeFlag = pollValue(&(pRegisterTable->pushCodeStatus), PC_PUSHCODE_RESET, 0x7fffffff);
+			if (pcPushCodeFlag == 0)
 			{
-				DEVICE_REG32_W(GBOOT_MAGIC_ADDR(coreIndex), *pBootEntryAddr);
-				platform_delay(1000);
-				DEVICE_REG32_W(IPC_INT_ADDR(coreIndex), 1);
-				platform_delay(1000000);
+				sprintf(printMessage, "coreId=%x,waitPcResetSuccessful\n\r", coreIndex);
+				write_uart(printMessage);
 			}
 			else
 			{
-				retVal = -2;
-
-				sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code failed\n\r", coreIndex, *pBootEntryAddr);
+				retVal = -1;
+				sprintf(printMessage, "coreId=%x,waitPcResetFailed\n\r", coreIndex);
 				write_uart(printMessage);
 				return (retVal);
 			}
-			sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code successful\n\r", coreIndex, *pBootEntryAddr);
-			write_uart(printMessage);
+
 		}
+		pRegisterTable->pushCodeControl = DSP_GETCODE_RESET;
 
 		pRegisterTable->SetMultiCoreBootControl = 0xff;
 		platform_delay(10000000);
@@ -451,4 +497,22 @@ uint32_t byteTo32bits(uint8_t *pDspCode)
 	}
 	return (temp);
 }
+
+int writeTOdsp()
+{
+	//updateWriteBuffer(reset);
+	//waitDSPreadBufferReset();
+	//writeOutBuffer();
+	//updateWriteBuffer(writeFinished);
+	//waitDSPreadFinished();
+}
+int readFromPC()
+{
+	//updateReadBuffer(reset);
+	//waitPCwriteBuffer();
+	//readInBuffer();
+	//updateReadBuffer(readFinished);
+	//waitWriteBufferReset();
+}
+
 #endif
