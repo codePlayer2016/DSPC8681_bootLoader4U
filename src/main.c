@@ -115,7 +115,7 @@ static int putData(uint32_t *DSPCodeAddr, uint32_t *pBootEntryAddr);
 uint32_t byteTo32bits(uint8_t *pDspCode);
 #endif
 
-#define DEBUG_PROCESS 1
+#define DEBUG_PROCESS
 #ifdef DEBUG_PROCESS
 void write_uart(char* msg)
 {
@@ -128,7 +128,7 @@ void write_uart(char* msg)
 		platform_uart_write(msg[i]);
 	}
 }
-#elif
+#else
 void write_uart(char *msg)
 {
 }
@@ -189,7 +189,8 @@ int main(void)
 		memset((uint8_t *) Core0L2, 0, 8 * sizeof(uint32_t));
 
 		int coreIndex = 0;
-		int coreMaxNum = 8; // todo: make this var macro.
+		int coreMaxNum = 2; // todo: make this var macro.
+
 
 		// TODO:
 		// improve,we can recode the status of every code, and should not return if one core boot failed.
@@ -203,8 +204,8 @@ int main(void)
 			pcPushCodeFlag = pollValue(&(pRegisterTable->pushCodeStatus), PC_PUSHCODE_FINISH, 0x7fffffff);
 			if (pcPushCodeFlag == 0)
 			{
-				sprintf(printMessage, "coreId=%x,waitPcWriteSuccessful\n\r", coreIndex);
-				write_uart(printMessage);
+//				sprintf(printMessage, "coreId=%x,waitPcWriteSuccessful\n\r", coreIndex);
+//				write_uart(printMessage);
 				//pRegisterTable->DPUBootControl |= DSP_GETCODE_FINISH;
 			}
 			else
@@ -236,8 +237,8 @@ int main(void)
 					else
 					{
 						retVal = -2;
-						sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code failed\n\r", coreIndex, *pBootEntryAddr);
-						write_uart(printMessage);
+//						sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code failed\n\r", coreIndex, *pBootEntryAddr);
+//						write_uart(printMessage);
 						return (retVal);
 					}
 				}
@@ -260,26 +261,26 @@ int main(void)
 						return (retVal);
 					}
 				}
-				sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code successful\n\r", coreIndex, *pBootEntryAddr);
-				write_uart(printMessage);
+//				sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code successful\n\r", coreIndex, *pBootEntryAddr);
+//				write_uart(printMessage);
 			}
 #endif
 			//* 4.updateReadBuffer(finished);
 			pRegisterTable->pushCodeControl = DSP_GETCODE_FINISH;
-			write_uart("updateReadBuffer_finished\n\r");
+//			write_uart("updateReadBuffer_finished\n\r");
 
 			//* 5. waitWriteBufferReset();
 			pcPushCodeFlag = pollValue(&(pRegisterTable->pushCodeStatus), PC_PUSHCODE_RESET, 0x7fffffff);
 			if (pcPushCodeFlag == 0)
 			{
-				sprintf(printMessage, "coreId=%x,waitPcResetSuccessful\n\r", coreIndex);
-				write_uart(printMessage);
+//				sprintf(printMessage, "coreId=%x,waitPcResetSuccessful\n\r", coreIndex);
+//				write_uart(printMessage);
 			}
 			else
 			{
 				retVal = -1;
-				sprintf(printMessage, "coreId=%x,waitPcResetFailed\n\r", coreIndex);
-				write_uart(printMessage);
+				//sprintf(printMessage, "coreId=%x,waitPcResetFailed\n\r", coreIndex);
+				//write_uart(printMessage);
 				return (retVal);
 			}
 
@@ -434,8 +435,8 @@ int putData(uint32_t *DSPCodeAddr, uint32_t *pBootEntryAddr)
 	*pBootEntryAddr = byteTo32bits(pDspImg);
 	pDspImg += 4;
 
-	sprintf(printMessage, "the pBootEntryAddr value is %x\n\r", *pBootEntryAddr);
-	write_uart(printMessage);
+	//sprintf(printMessage, "the pBootEntryAddr value is %x\n\r", *pBootEntryAddr);
+	//write_uart(printMessage);
 
 // Get the 1st sect secSize
 	secSize = byteTo32bits(pDspImg);
