@@ -140,7 +140,7 @@ int main(void)
 	int retVal = 0;
 	void (*core0EntryAddr)();
 
-	if (0 == DNUM)
+	//if (0 == DNUM)
 	{
 
 		uint32_t BootEntryAddr = 0;
@@ -189,7 +189,7 @@ int main(void)
 		memset((uint8_t *) Core0L2, 0, 8 * sizeof(uint32_t));
 
 		int coreIndex = 0;
-		int coreMaxNum = 2; // todo: make this var macro.
+		int coreMaxNum = 3; // todo: make this var macro.
 
 
 		// TODO:
@@ -283,9 +283,9 @@ int main(void)
 				//write_uart(printMessage);
 				return (retVal);
 			}
-
+			pRegisterTable->pushCodeControl = DSP_GETCODE_RESET;
 		}
-		pRegisterTable->pushCodeControl = DSP_GETCODE_RESET;
+
 
 		pRegisterTable->SetMultiCoreBootControl = 0xff;
 		platform_delay(10000000);
