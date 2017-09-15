@@ -189,7 +189,8 @@ int main(void)
 		memset((uint8_t *) Core0L2, 0, 8 * sizeof(uint32_t));
 
 		int coreIndex = 0;
-		int coreMaxNum = 2; // todo: make this var macro.
+		// only core0 run the alg,so the coreMaxNum=1.
+		int coreMaxNum = 1; // todo: make this var macro.
 
 
 		// TODO:
@@ -242,6 +243,7 @@ int main(void)
 						return (retVal);
 					}
 				}
+#if 0
 				else
 				{
 
@@ -261,6 +263,7 @@ int main(void)
 						return (retVal);
 					}
 				}
+#endif
 //				sprintf(printMessage, "coreId=%x,*pBootEntryAddr = %x,u0 load code successful\n\r", coreIndex, *pBootEntryAddr);
 //				write_uart(printMessage);
 			}
@@ -287,7 +290,7 @@ int main(void)
 		}
 		pRegisterTable->pushCodeControl = DSP_GETCODE_RESET;
 
-		pRegisterTable->SetMultiCoreBootControl = 0xff;
+		pRegisterTable->SetMultiCoreBootControl = 0x01;
 		platform_delay(10000000);
 
 		// wait the subCore to start.
