@@ -61,10 +61,8 @@ typedef struct _tagRegisterTable
 #endif
 
 #if 1
-static int pollValue(uint32_t *pAddress, uint32_t pollVal,
-		uint32_t maxPollCount);
-static int pushSectionData(uint32_t destAddr, uint32_t* pSrcAddr,
-		uint32_t length);
+static int pollValue(uint32_t *pAddress, uint32_t pollVal, uint32_t maxPollCount);
+static int pushSectionData(uint32_t destAddr, uint32_t* pSrcAddr, uint32_t length);
 static int putData(uint32_t *DSPCodeAddr, uint32_t *pBootEntryAddr);
 uint32_t byteTo32bits(uint8_t *pDspCode);
 #endif
@@ -137,14 +135,12 @@ void main(void)
 	pRegisterTable->DPUBootControl |= DSP_INIT_READY;
 
 	// 3. wait for the PC put code to DDR3. and return the status.
-	pcPushCodeFlag = pollValue(&(pRegisterTable->DPUBootStatus),
-			PC_PUSHCODE_FINISH, 0x7fffffff);
+	pcPushCodeFlag = pollValue(&(pRegisterTable->DPUBootStatus), PC_PUSHCODE_FINISH, 0x7fffffff);
 	if (pcPushCodeFlag == 0)
 	{
 		write_uart("Get the code successful\n\r");
 
-		sprintf(printMessage, "DPUBootStatus=%x\n\r",
-				pRegisterTable->DPUBootStatus);
+		sprintf(printMessage, "DPUBootStatus=%x\n\r", pRegisterTable->DPUBootStatus);
 		write_uart(printMessage);
 		pRegisterTable->DPUBootControl |= DSP_GETCODE_FINISH;
 	}
@@ -157,10 +153,11 @@ void main(void)
 	// 4. check the code and put the section to the proper address.
 	if (pcPushCodeFlag == 0)
 	{
-		// check the code.
+
 		uint32_t crcResult = 0;
 		uint8_t *pCodeAddr = (uint8_t *) (REG_LEN + C6678_PCIEDATA_BASE);
-
+#if 0 //inactive the crcCheck Code.
+		// check the code.
 		write_uart("begin to calculate the crc\n\r");
 
 		crcResult = coffFileCheckCrc(pCodeAddr);
@@ -180,14 +177,17 @@ void main(void)
 		if (crcResult == 0)
 		{
 			putData((uint32_t *) pCodeAddr, pBootEntryAddr);
-#if 0
 			sprintf(printMessage, "pBootEntryAddr = %x\n\r", pBootEntryAddr);
 			write_uart(printMessage);
-#endif
+
 		}
 		else
 		{
 		}
+#endif
+		putData((uint32_t *) pCodeAddr, pBootEntryAddr);
+		sprintf(printMessage, "pBootEntryAddr = %x\n\r", pBootEntryAddr);
+		write_uart(printMessage);
 
 	}
 	else
@@ -219,8 +219,7 @@ int pollValue(uint32_t *pAddress, uint32_t pollVal, uint32_t maxPollCount)
 	uint32_t stopPoll = 0;
 	uint32_t realTimeVal = 0;
 
-	for (loopCount = 0; (loopCount < maxPollCount) && (stopPoll == 0);
-			loopCount++)
+	for (loopCount = 0; (loopCount < maxPollCount) && (stopPoll == 0); loopCount++)
 	{
 		realTimeVal = (*pAddress);
 		if (realTimeVal & pollVal)
@@ -282,8 +281,7 @@ int putData(uint32_t *DSPCodeAddr, uint32_t *pBootEntryAddr)
 	*pBootEntryAddr = byteTo32bits(pDspImg);
 	pDspImg += 4;
 
-	sprintf(printMessage, "the pBootEntryAddr value is %x\n\r",
-			*pBootEntryAddr);
+	sprintf(printMessage, "the pBootEntryAddr value is %x\n\r", *pBootEntryAddr);
 	write_uart(printMessage);
 
 // Get the 1st sect secSize
